@@ -13,7 +13,9 @@
 #   *) Parallelize building
 #   *) Generalize building as different project might have different commands
 
+set -o errexit
 
+############ GLOBALS ############
 PROJECT="coreutils"
 
 # The folder of 'this' script
@@ -24,6 +26,29 @@ ROOT_DIR="${HOME}/.varan_experimental"
 INSTALL_DIR="${ROOT_DIR}/${PROJECT}"
 BIN_DIR="${ROOT_DIR}/bin"
 
+############ FUNCTIONS ############
+print_failure() {
+  local file=$1
+
+  echo ""
+  echo "We got an error:"
+  tput setaf 1;
+  tail -n10 ${file}
+  tput sgr0;
+  exit 1
+}
+
+print_vx_install() {
+  echo "varan (vx command) is not installed or not in PATH!"
+  exit 1
+}
+
+print_asan_install() {
+  echo "libasan is not installed!"
+  exit 1
+}
+
+############ MAIN ############
 if [ ! -d "${ROOT_DIR}" ] || [ ! -d "${ROOT_DIR}"/bin ]; then
   mkdir -p ${ROOT_DIR}/bin
 fi
@@ -37,17 +62,9 @@ if [ -d ${INSTALL_DIR} ]; then
   exit 1
 fi
 
-ldconfig -p | grep libasan &> /dev/null
-if [ $? -ne 0 ]; then
-    echo "libasan is not installed!"
-    exit 1
-fi
+ldconfig -p | grep libasan &> /dev/null || print_asan_install
 
-which vx &> /dev/null
-if [ $? -ne 0 ]; then
-    echo "varan (vx command) is not installed or not in PATH!"
-    exit 1
-fi
+which vx &> /dev/null || print_vx_install
 
 # This is step 2 from the description
 echo "Preparing for building with asan"
@@ -59,16 +76,18 @@ old_CFLAGS=${LDFLAGS}
 old_CFLAGS=${CXXFLAGS}
 old_CFLAGS=${CFLAGS}
 
-export LDFLAGS="${LDFLAGS} -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover"
-export CXXFLAGS="${CXXFLAGS} -g -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover"
-export CFLAGS="${CFLAGS} -g -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover"
+# -fsanitize-recover is not supported by the default GCC in ubunut 14.04
+export LDFLAGS="${LDFLAGS} -fsanitize=address -fno-omit-frame-pointer"
+export CXXFLAGS="${CXXFLAGS} -g -fsanitize=address -fno-omit-frame-pointer"
+export CFLAGS="${CFLAGS} -g -fsanitize=address -fno-omit-frame-pointer"
 
 echo "Building with asan"
 echo "You can see the building logs in: ${REPO_DIR}/${PROJECT}_asan.log"
 echo "This usually takes awhile. Please wait..."
-./configure --prefix=${INSTALL_DIR} &> ${REPO_DIR}/${PROJECT}_asan.log
-make $>> ${REPO_DIR}/${PROJECT}_asan.log
-make install &>> ${REPO_DIR}/${PROJECT}_asan.log
+LOG_FILE=${REPO_DIR}/${PROJECT}_asan.log
+./configure --prefix=${INSTALL_DIR} &> ${LOG_FILE} || print_failure ${LOG_FILE}
+make &>> ${LOG_FILE} || print_failure ${LOG_FILE}
+make install &>> ${LOG_FILE} || print_failure ${LOG_FILE}
 echo "Building with asan is done"
 
 # We just keep the executable binaries. We discard everything else
@@ -90,9 +109,10 @@ export CFLAGS="${old_CFLAGS}"
 echo "Normal building"
 echo "You can see the building logs in: ${REPO_DIR}/${PROJECT}_normal.log"
 echo "This usually takes awhile. Please wait..."
-./configure --prefix=${INSTALL_DIR} &> ${REPO_DIR}/${PROJECT}_normal.log
-make &>> ${REPO_DIR}/${PROJECT}_normal.log
-make install &>> ${REPO_DIR}/${PROJECT}_normal.log
+LOG_FILE=${REPO_DIR}/${PROJECT}_normal.log
+./configure --prefix=${INSTALL_DIR} &> ${LOG_FILE} || print_failure ${LOG_FILE}
+make &>> ${LOG_FILE} || print_failure ${LOG_FILE}
+make install &>> ${LOG_FILE} || print_failure ${LOG_FILE}
 echo "Normal building is done"
 
 rm -rf ${REPO_DIR}/${PROJECT}_build
