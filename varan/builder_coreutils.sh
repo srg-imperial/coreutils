@@ -72,8 +72,8 @@ tar xf ${PROJECT}.tar.xz
 cd ${REPO_DIR}/${PROJECT}_build
 
 # Store old values. We will need them to build a normal version
-old_CFLAGS=${LDFLAGS}
-old_CFLAGS=${CXXFLAGS}
+old_LDFLAGS=${LDFLAGS}
+old_CXXFLAGS=${CXXFLAGS}
 old_CFLAGS=${CFLAGS}
 
 # -fsanitize-recover is not supported by the default GCC in ubunut 14.04
